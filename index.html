@@ -796,13 +796,20 @@
             closeModal('modalAlertaSalir');
         }
 
-        // NUEVA FUNCIÓN: Confirmar salida
+        // NUEVA FUNCIÓN: Confirmar salida - MODIFICADA para regresar inmediatamente
         function confirmarSalir() {
             // Ejecutar logout real
             auth.signOut().then(() => {
-                document.getElementById('appContent').classList.add('hidden');
-                document.getElementById('appContent').classList.remove('opacity-100');
-                document.getElementById('landing').classList.remove('hidden');
+                // Ocultar aplicación inmediatamente
+                const appContent = document.getElementById('appContent');
+                appContent.classList.add('hidden');
+                appContent.classList.remove('opacity-100');
+                
+                // Mostrar landing page inmediatamente sin transiciones
+                const landing = document.getElementById('landing');
+                landing.style.display = 'flex';
+                landing.classList.remove('hidden');
+                landing.classList.remove('opacity-0');
                 
                 // Limpiar formulario de login
                 document.getElementById('loginEmail').value = '';
@@ -818,6 +825,20 @@
                 
                 // Cerrar modal de alerta
                 cerrarAlertaSalir();
+                
+                // Limpiar datos de la aplicación
+                productos = [];
+                productosFiltrados = [];
+                paginaActual = 1;
+                
+                // Limpiar tabla
+                document.getElementById('productTableBody').innerHTML = '';
+                
+                // Resetear KPIs
+                document.getElementById('totalHeladera').textContent = '0';
+                document.getElementById('totalDespensa').textContent = '0';
+                document.getElementById('totalProximos').textContent = '0';
+                document.getElementById('totalReponer').textContent = '0';
             });
         }
 
