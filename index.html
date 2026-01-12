@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Despensa Inteligente SPA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.0/firebase-auth-compat.js"></script>
+    <style>
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); }
+        .bg-glass { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); }
+        @keyframes pulse-red {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
+            50% { transform: scale(1.02); box-shadow: 0 0 40px rgba(239, 68, 68, 0.8); }
+        }
+        .alerta-critica { animation: pulse-red 2s infinite; border: 2px solid #ef4444; }
+        .shake { animation: shake 0.5s ease-in-out; }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-900">
+
+    <!-- Landing Page con Login -->
+    <div id="landing" class="fixed inset-0 bg-gradient-to-br from-slate-900 to-blue-900 flex flex-col items-center justify-center text-white z-[9999] p-4">
+        <div class="text-center space-y-8 max-w-md w-full">
+            <div class="relative inline-block">
+                <div class="bg-blue-600/20 p-6 rounded-2xl backdrop-blur-sm border border-blue-500/30">
+                    <i class="fas fa-boxes-stacked text-7xl text-blue-400"></i>
+                </div>
+                <div class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full animate-ping"></div>
+            </div>
+            
+            <div class="space-y-2">
+                <h1 class="text-4xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-cyan-300">GESTOR DE DESPENSA</h1>
+                <p class="text-slate-400 text-sm">Control inteligente de tu inventario doméstico</p>
+            </div>
+
+            <!-- Formulario de Login -->
+            <div id="loginForm" class="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-8 space-y-6">
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-lock text-blue-400"></i> ACCESO AL SISTEMA
+                </h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-sm font-medium text-slate-300 block mb-2">Correo Electrónico</label>
+                        <div class="relative">
+                            <i class="fas fa-envelope absolute left-4 top-3.5 text-slate-400"></i>
+                            <input type="email" id="loginEmail" 
+                                placeholder="usuario@ejemplo.com"
+                                class="w-full pl-12 pr-4 py-3.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="text-sm font-medium text-slate-300 block mb-2">Contraseña</label>
+                        <div class="relative">
+                            <i class="fas fa-key absolute left-4 top-3.5 text-slate-400"></i>
+                            <input type="password" id="loginPassword" 
+                                placeholder="••••••••"
+                                class="w-full pl-12 pr-12 py-3.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                            <button type="button" onclick="togglePassword()" class="absolute right-4 top-3.5 text-slate-400 hover:text-white">
+                                <i class="fas fa-eye" id="eyeIcon"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="loginError" class="hidden bg-red-500/20 border border-red-500/30 rounded-xl p-4 text-red-300 text-sm">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    <span id="errorText">Credenciales incorrectas</span>
+                </div>
+
+                <button onclick="loginUser()" id="loginButton" class="w-full bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white py-4 rounded-xl font-bold text-lg transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shadow-2xl shadow-blue-500/30 flex items-center justify-center gap-3">
+                    <i class="fas fa-sign-in-alt"></i>
+                    <span>INGRESAR AL SISTEMA</span>
+                    <i id="loginSpinner" class="fas fa-spinner fa-spin hidden"></i>
+                </button>
+
+                <div class="text-center pt-4 border-t border-white/10">
+                    <p class="text-slate-400 text-sm">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        Acceso restringido a usuarios autorizados
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenido de la Aplicación (oculto inicialmente) -->
+    <div id="appContent" class="hidden opacity-0 transition-opacity duration-1000">
+        <header class="bg-white border-b border-slate-200 p-4 sticky top-0 z-40 shadow-sm">
+            <div class="container mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <div class="bg-blue-600 p-2 rounded-lg text-white">
+                        <i class="fas fa-fridge"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-black text-slate-800 tracking-tighter">MI STOCK HOGAR</h1>
+                        <p class="text-xs text-slate-500 flex items-center gap-1" id="userEmailDisplay">
+                            <i class="fas fa-user text-blue-500"></i>
+                            <span id="currentUserEmail"></span>
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <div class="relative w-full md:w-64">
+                        <i class="fas fa-search absolute left-3 top-3 text-slate-400"></i>
+                        <input type="text" id="searchInput" placeholder="Buscar producto..." 
+                            class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all">
+                    </div>
+                    
+                    <button onclick="logoutUser()" class="text-slate-600 hover:text-red-600 transition-colors p-2 rounded-lg hover:bg-red-50" title="Cerrar sesión">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="container mx-auto p-4 md:p-8">
+            <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead class="bg-slate-800 text-white">
+                            <tr class="text-left text-xs uppercase tracking-widest">
+                                <th class="px-6 py-4">Producto</th>
+                                <th class="px-6 py-4">Cant.</th>
+                                <th class="px-6 py-4">Ubicación</th>
+                                <th class="px-6 py-4">Vencimiento</th>
+                                <th class="px-6 py-4">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productTableBody" class="divide-y divide-slate-100 text-slate-700">
+                            <!-- Los productos se cargarán aquí desde Firebase -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <button onclick="openModal('modalRegistro')" class="fixed bottom-8 right-8 bg-blue-600 hover:bg-blue-700 text-white w-16 h-16 rounded-full shadow-2xl flex items-center justify-center text-2xl transition-all hover:scale-110 active:rotate-90 z-40">
+            <i class="fas fa-plus"></i>
+        </button>
+    </div>
+
+    <!-- Modal de Registro de Producto -->
+    <div id="modalRegistro" class="hidden fixed inset-0 modal-overlay flex items-center justify-center z-[100] p-4">
+        <div class="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden">
+            <div class="bg-slate-900 p-6 text-white flex justify-between items-center">
+                <h2 class="font-bold flex items-center gap-2"><i class="fas fa-cart-plus text-blue-400"></i>NUEVO REGISTRO</h2>
+                <button onclick="closeModal('modalRegistro')" class="text-2xl hover:text-red-400">&times;</button>
+            </div>
+            <form id="productForm" class="p-8 grid grid-cols-2 gap-4">
+                <div class="col-span-2">
+                    <label class="text-xs font-bold text-slate-400 uppercase">Nombre del Producto</label>
+                    <input type="text" id="nombre" class="w-full border-b-2 py-2 outline-none focus:border-blue-500" required>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 uppercase">Cantidad</label>
+                    <input type="number" id="cantidad" class="w-full border-b-2 py-2 outline-none focus:border-blue-500" required>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 uppercase">Ubicación</label>
+                    <select id="ubicacion" class="w-full border-b-2 py-2 outline-none focus:border-blue-500">
+                        <option value="Heladera">Heladera ❄️</option>
+                        <option value="Despensa">Despensa 📦</option>
+                    </select>
+                </div>
+                <div class="col-span-2">
+                    <label class="text-xs font-bold text-slate-400 uppercase">Comercio de Compra</label>
+                    <select id="comercio" class="w-full border-b-2 py-2 outline-none focus:border-blue-500">
+                        <option>Supermercado California</option>
+                        <option>Supermercado Chino</option>
+                        <option>Hiper del Pollo</option>
+                        <option>Despensa barrial</option>
+                        <option>Otro comercio</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-red-500 uppercase">F. Vencimiento</label>
+                    <input type="date" id="vencimiento" class="w-full border-b-2 py-2 outline-none focus:border-red-500 text-red-600 font-bold" required>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-400 uppercase">F. Compra</label>
+                    <input type="date" id="fechaCompra" class="w-full border-b-2 py-2 outline-none focus:border-blue-500">
+                </div>
+                <div class="col-span-2">
+                    <label class="text-xs font-bold text-slate-400 uppercase">Precio Pagado ($)</label>
+                    <input type="number" step="0.01" id="precio" class="w-full border-b-2 py-2 outline-none focus:border-green-600 font-bold">
+                </div>
+                <button type="submit" class="col-span-2 bg-blue-600 text-white py-4 rounded-2xl font-black mt-4 hover:bg-blue-700 transition shadow-lg shadow-blue-200">GUARDAR EN STOCK</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Detalle Producto -->
+    <div id="modalDetalle" class="hidden fixed inset-0 modal-overlay flex items-center justify-center z-[200] p-4">
+        <div class="bg-slate-900 text-white rounded-[2rem] w-full max-w-md overflow-hidden border border-white/10 shadow-3xl">
+            <div id="detalleBanner" class="p-8 text-center bg-blue-600 relative">
+                <button onclick="closeModalDetalle()" class="absolute top-4 right-6 text-2xl text-white/50 hover:text-white">&times;</button>
+                <div class="bg-white/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-clock text-3xl"></i>
+                </div>
+                <h2 id="detNombre" class="text-3xl font-black uppercase tracking-tighter italic">Nombre Producto</h2>
+                <p id="detUbicacion" class="text-blue-100 text-sm font-bold opacity-80 mt-1 uppercase"></p>
+            </div>
+            
+            <div class="p-8 space-y-6">
+                <div class="text-center">
+                    <p class="text-[10px] text-slate-400 font-bold tracking-[0.3em] mb-4 uppercase">Tiempo hasta caducidad</p>
+                    <div id="detCrono" class="grid grid-cols-4 gap-2">
+                        <!-- Cronómetro se llenará dinámicamente -->
+                    </div>
+                </div>
+
+                <hr class="border-white/5">
+
+                <div class="grid grid-cols-2 gap-6 text-sm">
+                    <div>
+                        <p class="text-slate-500 font-bold text-[10px] uppercase">Vencimiento</p>
+                        <p id="detVenc" class="text-red-400 font-mono text-lg font-bold"></p>
+                    </div>
+                    <div>
+                        <p class="text-slate-500 font-bold text-[10px] uppercase">Cantidad</p>
+                        <p id="detCant" class="text-white text-lg font-bold"></p>
+                    </div>
+                    <div>
+                        <p class="text-slate-500 font-bold text-[10px] uppercase">Comercio</p>
+                        <p id="detComercio" class="text-slate-300"></p>
+                    </div>
+                    <div>
+                        <p class="text-slate-500 font-bold text-[10px] uppercase">Precio</p>
+                        <p id="detPrecio" class="text-green-400 font-bold text-lg"></p>
+                    </div>
+                </div>
+                
+                <div class="bg-white/5 rounded-2xl p-4 flex justify-between items-center">
+                    <div>
+                        <p class="text-slate-500 font-bold text-[10px] uppercase">Fecha de Compra</p>
+                        <p id="detFechaCompra" class="text-slate-300 text-xs"></p>
+                    </div>
+                    <i class="fas fa-receipt text-slate-700 text-2xl"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Alerta Vencimientos -->
+    <div id="modalAlerta" class="hidden fixed inset-0 modal-overlay flex items-center justify-center z-[300] p-4">
+        <div class="bg-red-600 text-white rounded-[2.5rem] w-full max-w-xs p-8 text-center alerta-critica">
+            <i class="fas fa-radiation text-6xl mb-4"></i>
+            <h2 class="text-2xl font-black mb-2 uppercase">¡ALERTA ROJA!</h2>
+            <p class="text-red-100 text-sm mb-6">Los siguientes productos vencerán en menos de 72 horas:</p>
+            <div id="listaCritica" class="bg-black/20 rounded-2xl p-4 text-left space-y-2 mb-8 max-h-40 overflow-y-auto font-bold text-sm">
+                <!-- Lista de productos críticos -->
+            </div>
+            <button onclick="closeModal('modalAlerta')" class="w-full bg-white text-red-600 py-4 rounded-full font-black uppercase shadow-2xl">Revisar Despensa</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuración de Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyC1iV3lTl9NOS3aIgIqZRbqAqyt4r6SL8k",
+            authDomain: "stock-comida.firebaseapp.com",
+            projectId: "stock-comida",
+            storageBucket: "stock-comida.firebasestorage.app",
+            messagingSenderId: "905331365386",
+            appId: "1:905331365386:web:d57d307b4108e540a0f1f3"
+        };
+
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+        let productos = [];
+        let globalCronoInterval;
+
+        // Verificar estado de autenticación al cargar
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                // Usuario ya está autenticado
+                document.getElementById('currentUserEmail').textContent = user.email;
+                iniciarApp();
+            }
+        });
+
+        // Función para alternar visibilidad de contraseña
+        function togglePassword() {
+            const passwordInput = document.getElementById('loginPassword');
+            const eyeIcon = document.getElementById('eyeIcon');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                eyeIcon.classList.remove('fa-eye');
+                eyeIcon.classList.add('fa-eye-slash');
+            } else {
+                passwordInput.type = 'password';
+                eyeIcon.classList.remove('fa-eye-slash');
+                eyeIcon.classList.add('fa-eye');
+            }
+        }
+
+        // Función para mostrar error de login
+        function showLoginError(message) {
+            const errorDiv = document.getElementById('loginError');
+            const errorText = document.getElementById('errorText');
+            const loginForm = document.getElementById('loginForm');
+            
+            errorText.textContent = message;
+            errorDiv.classList.remove('hidden');
+            loginForm.classList.add('shake');
+            
+            setTimeout(() => {
+                loginForm.classList.remove('shake');
+            }, 500);
+        }
+
+        // Función de login
+        async function loginUser() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const loginButton = document.getElementById('loginButton');
+            const loginSpinner = document.getElementById('loginSpinner');
+            
+            // Validación básica
+            if (!email || !password) {
+                showLoginError('Por favor complete todos los campos');
+                return;
+            }
+            
+            // Mostrar spinner y deshabilitar botón
+            loginButton.disabled = true;
+            loginSpinner.classList.remove('hidden');
+            loginButton.innerHTML = '<span>VERIFICANDO...</span>';
+            
+            try {
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                // Login exitoso - iniciarApp se llamará desde onAuthStateChanged
+                document.getElementById('currentUserEmail').textContent = userCredential.user.email;
+            } catch (error) {
+                // Manejar errores de Firebase Auth
+                let errorMessage = 'Error de autenticación';
+                
+                switch (error.code) {
+                    case 'auth/invalid-email':
+                        errorMessage = 'Email inválido';
+                        break;
+                    case 'auth/user-disabled':
+                        errorMessage = 'Usuario deshabilitado';
+                        break;
+                    case 'auth/user-not-found':
+                        errorMessage = 'Usuario no encontrado';
+                        break;
+                    case 'auth/wrong-password':
+                        errorMessage = 'Contraseña incorrecta';
+                        break;
+                    case 'auth/too-many-requests':
+                        errorMessage = 'Demasiados intentos. Intente más tarde';
+                        break;
+                    default:
+                        errorMessage = error.message;
+                }
+                
+                showLoginError(errorMessage);
+                
+                // Restaurar botón
+                loginButton.disabled = false;
+                loginSpinner.classList.add('hidden');
+                loginButton.innerHTML = '<i class="fas fa-sign-in-alt"></i><span>INGRESAR AL SISTEMA</span>';
+            }
+        }
+
+        // Función de logout
+        function logoutUser() {
+            if (confirm('¿Está seguro que desea cerrar sesión?')) {
+                auth.signOut().then(() => {
+                    // Ocultar app y mostrar login
+                    document.getElementById('appContent').classList.add('hidden');
+                    document.getElementById('appContent').classList.remove('opacity-100');
+                    document.getElementById('landing').classList.remove('hidden');
+                    
+                    // Limpiar campos de login
+                    document.getElementById('loginEmail').value = '';
+                    document.getElementById('loginPassword').value = '';
+                    document.getElementById('loginError').classList.add('hidden');
+                    
+                    // Restaurar botón de login
+                    const loginButton = document.getElementById('loginButton');
+                    const loginSpinner = document.getElementById('loginSpinner');
+                    loginButton.disabled = false;
+                    loginSpinner.classList.add('hidden');
+                    loginButton.innerHTML = '<i class="fas fa-sign-in-alt"></i><span>INGRESAR AL SISTEMA</span>';
+                });
+            }
+        }
+
+        // Iniciar aplicación después de login exitoso
+        function iniciarApp() {
+            // Ocultar landing page
+            document.getElementById('landing').classList.add('opacity-0');
+            setTimeout(() => {
+                document.getElementById('landing').style.display = 'none';
+                
+                // Mostrar aplicación
+                document.getElementById('appContent').classList.remove('hidden');
+                setTimeout(() => {
+                    document.getElementById('appContent').classList.add('opacity-100');
+                    cargarProductosFirebase();
+                }, 50);
+            }, 300);
+        }
+
+        // --- FUNCIONES FIREBASE ---
+        async function cargarProductosFirebase() {
+            try {
+                const snapshot = await db.collection("productos").get();
+                productos = [];
+                snapshot.forEach(doc => {
+                    productos.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
+                actualizarTabla();
+                escanearVencimientos();
+            } catch (error) {
+                console.error("Error cargando productos:", error);
+            }
+        }
+
+        async function guardarProductoFirebase(producto) {
+            try {
+                // Agregar usuario actual como propietario
+                const user = auth.currentUser;
+                if (user) {
+                    producto.userId = user.uid;
+                    producto.userEmail = user.email;
+                }
+                
+                producto.timestamp = firebase.firestore.FieldValue.serverTimestamp();
+                
+                const docRef = await db.collection("productos").add(producto);
+                producto.firebaseId = docRef.id;
+                return producto;
+            } catch (error) {
+                console.error("Error guardando producto:", error);
+                throw error;
+            }
+        }
+
+        async function eliminarProductoFirebase(id) {
+            try {
+                await db.collection("productos").doc(id).delete();
+                return true;
+            } catch (error) {
+                console.error("Error eliminando producto:", error);
+                return false;
+            }
+        }
+
+        // --- FUNCIONES CORE ---
+        function formatFecha(str) {
+            if(!str) return '-';
+            const [y, m, d] = str.split('-');
+            return `${d}/${m}/${y}`;
+        }
+
+        function openModal(id) { 
+            document.getElementById(id).classList.remove('hidden'); 
+        }
+        
+        function closeModal(id) { 
+            document.getElementById(id).classList.add('hidden'); 
+        }
+
+        document.getElementById('productForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const p = {
+                nombre: document.getElementById('nombre').value,
+                cantidad: document.getElementById('cantidad').value,
+                ubicacion: document.getElementById('ubicacion').value,
+                comercio: document.getElementById('comercio').value,
+                vencimiento: document.getElementById('vencimiento').value,
+                fechaCompra: document.getElementById('fechaCompra').value || new Date().toISOString().split('T')[0],
+                precio: document.getElementById('precio').value || "0.00"
+            };
+            
+            try {
+                await guardarProductoFirebase(p);
+                await cargarProductosFirebase();
+                closeModal('modalRegistro');
+                e.target.reset();
+            } catch (error) {
+                alert("Error al guardar el producto. Intenta nuevamente.");
+            }
+        });
+
+        async function eliminarP(id, e) {
+            e.stopPropagation();
+            if(confirm('¿Eliminar producto del inventario?')) {
+                const success = await eliminarProductoFirebase(id);
+                if (success) {
+                    await cargarProductosFirebase();
+                } else {
+                    alert("Error al eliminar el producto.");
+                }
+            }
+        }
+
+        function actualizarTabla(lista = productos) {
+            const body = document.getElementById('productTableBody');
+            body.innerHTML = lista.map(p => `
+                <tr onclick="mostrarDetalle('${p.id}')" class="hover:bg-blue-50 cursor-pointer transition-all">
+                    <td class="px-6 py-5 font-black text-slate-800 uppercase text-xs tracking-tighter">${p.nombre}</td>
+                    <td class="px-6 py-5 font-mono font-bold">${p.cantidad}</td>
+                    <td class="px-6 py-5">
+                        <span class="text-[10px] font-black px-2 py-1 rounded-md ${p.ubicacion === 'Heladera' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'} uppercase">
+                            ${p.ubicacion}
+                        </span>
+                    </td>
+                    <td class="px-6 py-5 font-bold text-red-600 font-mono text-sm">${formatFecha(p.vencimiento)}</td>
+                    <td class="px-6 py-5">
+                        <button onclick="eliminarP('${p.id}', event)" class="text-slate-300 hover:text-red-500 transition-colors">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // --- LÓGICA DETALLE Y CRONÓMETRO ---
+        function mostrarDetalle(id) {
+            const p = productos.find(x => x.id === id);
+            if(!p) return;
+
+            // Llenar datos fijos
+            document.getElementById('detNombre').innerText = p.nombre;
+            document.getElementById('detUbicacion').innerText = p.ubicacion + " • " + p.comercio;
+            document.getElementById('detCant').innerText = p.cantidad;
+            document.getElementById('detVenc').innerText = formatFecha(p.vencimiento);
+            document.getElementById('detComercio').innerText = p.comercio;
+            document.getElementById('detPrecio').innerText = "$" + p.precio;
+            document.getElementById('detFechaCompra').innerText = formatFecha(p.fechaCompra);
+
+            // Cambiar color del banner según ubicación
+            document.getElementById('detalleBanner').className = `p-8 text-center relative ${p.ubicacion === 'Heladera' ? 'bg-blue-600' : 'bg-orange-600'}`;
+
+            openModal('modalDetalle');
+            
+            // Iniciar cronómetro real-time
+            const updateDetCrono = () => {
+                const target = new Date(p.vencimiento + "T23:59:59").getTime();
+                const now = new Date().getTime();
+                const diff = target - now;
+
+                if (diff < 0) {
+                    document.getElementById('detCrono').innerHTML = "<div class='col-span-4 text-red-500 font-black animate-pulse'>PRODUCTO VENCIDO</div>";
+                    return;
+                }
+
+                const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+                const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const s = Math.floor((diff % (1000 * 60)) / 1000);
+
+                const caja = (num, label) => `
+                    <div class="bg-white/10 p-2 rounded-xl">
+                        <div class="text-2xl font-black">${num}</div>
+                        <div class="text-[8px] uppercase text-white/50">${label}</div>
+                    </div>`;
+                
+                document.getElementById('detCrono').innerHTML = caja(d, 'días') + caja(h, 'hrs') + caja(m, 'min') + caja(s, 'seg');
+            };
+
+            updateDetCrono();
+            globalCronoInterval = setInterval(updateDetCrono, 1000);
+        }
+
+        function closeModalDetalle() {
+            clearInterval(globalCronoInterval);
+            closeModal('modalDetalle');
+        }
+
+        // --- ALERTA 3 DÍAS ANTES ---
+        function escanearVencimientos() {
+            const hoy = new Date();
+            const criticos = productos.filter(p => {
+                const fv = new Date(p.vencimiento);
+                const diff = (fv - hoy) / (1000 * 60 * 60 * 24);
+                return diff <= 3 && diff >= -2;
+            });
+
+            if(criticos.length > 0) {
+                document.getElementById('listaCritica').innerHTML = criticos.map(p => 
+                    `<div class="flex justify-between border-b border-white/10 pb-1">
+                        <span>${p.nombre}</span>
+                        <span class="font-mono">${formatFecha(p.vencimiento)}</span>
+                    </div>`
+                ).join('');
+                openModal('modalAlerta');
+            }
+        }
+
+        // --- FILTRO DE BÚSQUEDA ---
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            const filtrados = productos.filter(p => 
+                p.nombre.toLowerCase().includes(term) || 
+                p.ubicacion.toLowerCase().includes(term) || 
+                p.comercio.toLowerCase().includes(term)
+            );
+            actualizarTabla(filtrados);
+        });
+
+        // Permitir login con Enter
+        document.getElementById('loginPassword').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                loginUser();
+            }
+        });
+    </script>
+</body>
+</html>
