@@ -160,12 +160,12 @@
                     </div>
                 </div>
                 
-                <div class="bg-white rounded-2xl shadow-lg border border-red-100 p-6">
+                <div class="bg-white rounded-2xl shadow-lg border border-red-100 p-6 cursor-pointer hover:bg-red-50 transition-colors" onclick="mostrarProximosVencer()">
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-slate-500 text-sm font-bold uppercase">Próximos a Vencer (≤3 días)</p>
                             <p id="totalProximos" class="text-3xl font-black text-red-600">0</p>
-                            <p class="text-xs text-slate-500 mt-1">Suma de cantidades</p>
+                            <p class="text-xs text-slate-500 mt-1">Click para ver detalles</p>
                         </div>
                         <i class="fas fa-exclamation-triangle text-4xl text-red-200"></i>
                     </div>
@@ -384,6 +384,48 @@
                 <!-- Lista de productos críticos -->
             </div>
             <button onclick="closeModal('modalAlerta')" class="w-full bg-white text-red-600 py-4 rounded-full font-black uppercase shadow-2xl">Revisar Despensa</button>
+        </div>
+    </div>
+
+    <!-- Modal Productos Próximos a Vencer -->
+    <div id="modalProximosVencer" class="hidden fixed inset-0 modal-overlay flex items-center justify-center z-[400] p-4">
+        <div class="bg-white rounded-2xl w-full max-w-sm md:max-w-md shadow-2xl overflow-hidden">
+            <div class="bg-red-600 p-5 text-white flex justify-between items-center">
+                <h2 class="font-bold flex items-center gap-2 text-lg">
+                    <i class="fas fa-clock"></i> PRÓXIMOS A VENCER
+                </h2>
+                <button onclick="closeModal('modalProximosVencer')" class="text-2xl hover:text-red-200">&times;</button>
+            </div>
+            
+            <div class="p-6 max-h-[60vh] overflow-y-auto">
+                <div class="mb-4">
+                    <p class="text-slate-600 text-sm mb-3">
+                        <i class="fas fa-info-circle text-red-500 mr-2"></i>
+                        Productos que vencen en los próximos 3 días
+                    </p>
+                </div>
+                
+                <div id="listaProximosVencer" class="space-y-3">
+                    <!-- Lista de productos próximos a vencer se generará aquí -->
+                </div>
+                
+                <div id="sinProximosVencer" class="text-center py-8 hidden">
+                    <i class="fas fa-check-circle text-5xl text-green-400 mb-4"></i>
+                    <p class="text-slate-600 font-medium">¡Excelente!</p>
+                    <p class="text-slate-500 text-sm">No hay productos próximos a vencer</p>
+                </div>
+            </div>
+            
+            <div class="bg-slate-50 p-4 border-t border-slate-200">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-slate-600">
+                        <span id="contadorProximos" class="font-bold">0</span> productos
+                    </span>
+                    <button onclick="closeModal('modalProximosVencer')" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors">
+                        Cerrar
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -631,6 +673,77 @@
             document.getElementById('btnGuardar').classList.add('bg-blue-600');
             document.getElementById('productForm').reset();
             closeModal('modalRegistro');
+        }
+
+        // Función para mostrar productos próximos a vencer
+        function mostrarProximosVencer() {
+            const hoy = new Date();
+            const productosProximos = productos.filter(p => {
+                if (!p.vencimiento) return false;
+                const fechaVencimiento = new Date(p.vencimiento);
+                const diffDias = Math.ceil((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24));
+                return diffDias <= 3 && diffDias >= 0;
+            });
+            
+            const listaProximos = document.getElementById('listaProximosVencer');
+            const sinProximos = document.getElementById('sinProximosVencer');
+            const contadorProximos = document.getElementById('contadorProximos');
+            
+            contadorProximos.textContent = productosProximos.length;
+            
+            if (productosProximos.length === 0) {
+                listaProximos.classList.add('hidden');
+                sinProximos.classList.remove('hidden');
+            } else {
+                listaProximos.classList.remove('hidden');
+                sinProximos.classList.add('hidden');
+                
+                listaProximos.innerHTML = productosProximos.map(p => {
+                    const fechaVencimiento = new Date(p.vencimiento);
+                    const diffDias = Math.ceil((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24));
+                    
+                    let colorDias = 'text-green-600';
+                    if (diffDias === 0) colorDias = 'text-red-600 font-bold';
+                    else if (diffDias === 1) colorDias = 'text-orange-600 font-bold';
+                    else if (diffDias === 2) colorDias = 'text-yellow-600';
+                    
+                    let textoDias = '';
+                    if (diffDias === 0) textoDias = 'Hoy';
+                    else if (diffDias === 1) textoDias = 'Mañana';
+                    else textoDias = `En ${diffDias} días`;
+                    
+                    return `
+                    <div class="border border-slate-200 rounded-xl p-4 hover:bg-red-50 transition-colors cursor-pointer" onclick="mostrarDetalle('${p.id}'); closeModal('modalProximosVencer')">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-bold text-slate-800">${p.nombre}</span>
+                                    <span class="text-xs px-2 py-1 rounded ${p.ubicacion === 'Heladera' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}">
+                                        ${p.ubicacion}
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-4 mt-2 text-sm">
+                                    <span class="text-slate-600">
+                                        <i class="fas fa-box text-slate-400 mr-1"></i>
+                                        ${p.cantidad} unidades
+                                    </span>
+                                    <span class="text-slate-600">
+                                        <i class="fas fa-store text-slate-400 mr-1"></i>
+                                        ${p.comercio}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="${colorDias} font-bold">${textoDias}</div>
+                                <div class="text-xs text-slate-500 mt-1">${formatFecha(p.vencimiento)}</div>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                }).join('');
+            }
+            
+            openModal('modalProximosVencer');
         }
 
         // Manejo del formulario de producto
