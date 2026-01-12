@@ -20,7 +20,12 @@
             0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); }
             50% { transform: scale(1.02); box-shadow: 0 0 40px rgba(239, 68, 68, 0.8); }
         }
+        @keyframes pulse-orange {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 0px rgba(249, 115, 22, 0.3); }
+            50% { transform: scale(1.01); box-shadow: 0 0 15px rgba(249, 115, 22, 0.6); }
+        }
         .alerta-critica { animation: pulse-red 2s infinite; border: 2px solid #ef4444; }
+        .alerta-naranja { animation: pulse-orange 2s infinite; border: 2px solid #f97316; }
         .shake { animation: shake 0.5s ease-in-out; }
         @keyframes shake {
             0%, 100% { transform: translateX(0); }
@@ -30,6 +35,10 @@
         .pagination-btn.active {
             background-color: #3b82f6;
             color: white;
+        }
+        .bajo-stock {
+            background: linear-gradient(90deg, #ffedd5 0%, #fed7aa 50%, #fdba74 100%);
+            border-left: 4px solid #f97316;
         }
     </style>
 </head>
@@ -166,7 +175,13 @@
             <!-- Filtros y Exportar -->
             <div class="bg-white rounded-2xl shadow-xl border border-slate-200 p-6 mb-8">
                 <div class="flex flex-col md:flex-row justify-between items-center gap-4">
-                    <div class="flex items-center gap-4 w-full md:w-auto">
+                    <div class="flex flex-wrap items-center gap-4 w-full md:w-auto">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Producto</label>
+                            <select id="filtroProducto" class="w-full md:w-48 px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                                <option value="">Todos los productos</option>
+                            </select>
+                        </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1">Mes Compra</label>
                             <select id="filtroMes" class="w-full md:w-40 px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
@@ -401,6 +416,7 @@
         // Filtros
         let filtroMes = '';
         let filtroAnio = '';
+        let filtroProducto = '';
         let editandoProductoId = null;
 
         // Verificar estado de autenticación al cargar
@@ -539,8 +555,9 @@
                     });
                 });
                 
-                // Llenar selector de años
+                // Llenar selectores
                 llenarSelectorAnios();
+                llenarSelectorProductos();
                 
                 // Actualizar todo
                 aplicarFiltrosYActualizar();
@@ -699,10 +716,20 @@
             document.getElementById('paginacionTotal').textContent = productosFiltrados.length;
             
             // Generar filas de la tabla
-            body.innerHTML = productosPaginados.map(p => `
-                <tr onclick="mostrarDetalle('${p.id}')" class="hover:bg-blue-50 cursor-pointer transition-all">
-                    <td class="px-6 py-5 font-black text-slate-800 uppercase text-xs tracking-tighter">${p.nombre}</td>
-                    <td class="px-6 py-5 font-mono font-bold">${p.cantidad}</td>
+            body.innerHTML = productosPaginados.map(p => {
+                const cantidad = parseInt(p.cantidad) || 0;
+                const tieneBajoStock = cantidad === 1;
+                
+                return `
+                <tr onclick="mostrarDetalle('${p.id}')" class="hover:bg-blue-50 cursor-pointer transition-all ${tieneBajoStock ? 'bajo-stock' : ''}">
+                    <td class="px-6 py-5 font-black text-slate-800 uppercase text-xs tracking-tighter">
+                        ${p.nombre}
+                        ${tieneBajoStock ? '<span class="ml-2 inline-block w-2 h-2 bg-orange-500 rounded-full animate-pulse"></span>' : ''}
+                    </td>
+                    <td class="px-6 py-5 font-mono font-bold">
+                        ${p.cantidad}
+                        ${tieneBajoStock ? '<span class="ml-2 text-xs font-bold text-orange-600">¡REPONER!</span>' : ''}
+                    </td>
                     <td class="px-6 py-5">
                         <span class="text-[10px] font-black px-2 py-1 rounded-md ${p.ubicacion === 'Heladera' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'} uppercase">
                             ${p.ubicacion}
@@ -718,7 +745,8 @@
                         </button>
                     </td>
                 </tr>
-            `).join('');
+                `;
+            }).join('');
             
             // Actualizar controles de paginación
             actualizarControlesPaginacion();
@@ -791,17 +819,41 @@
             });
         }
 
+        function llenarSelectorProductos() {
+            const selectorProducto = document.getElementById('filtroProducto');
+            selectorProducto.innerHTML = '<option value="">Todos los productos</option>';
+            
+            // Extraer nombres únicos de productos
+            const nombresUnicos = new Set();
+            productos.forEach(p => {
+                if (p.nombre) {
+                    nombresUnicos.add(p.nombre);
+                }
+            });
+            
+            // Ordenar alfabéticamente
+            Array.from(nombresUnicos).sort((a, b) => a.localeCompare(b)).forEach(nombre => {
+                const option = document.createElement('option');
+                option.value = nombre;
+                option.textContent = nombre;
+                selectorProducto.appendChild(option);
+            });
+        }
+
         function aplicarFiltroFecha() {
             filtroMes = document.getElementById('filtroMes').value;
             filtroAnio = document.getElementById('filtroAnio').value;
+            filtroProducto = document.getElementById('filtroProducto').value;
             aplicarFiltrosYActualizar();
         }
 
         function limpiarFiltroFecha() {
             document.getElementById('filtroMes').value = '';
             document.getElementById('filtroAnio').value = '';
+            document.getElementById('filtroProducto').value = '';
             filtroMes = '';
             filtroAnio = '';
+            filtroProducto = '';
             aplicarFiltrosYActualizar();
         }
 
@@ -835,7 +887,13 @@
                     }
                 }
                 
-                return coincideBusqueda && coincideFecha;
+                // Filtro de producto
+                let coincideProducto = true;
+                if (filtroProducto) {
+                    coincideProducto = p.nombre === filtroProducto;
+                }
+                
+                return coincideBusqueda && coincideFecha && coincideProducto;
             });
             
             // Volver a la primera página
@@ -978,13 +1036,12 @@
             doc.text(`Generado: ${fecha}`, 14, 25);
             
             let filtrosTexto = 'Filtros: ';
-            if (filtroMes || filtroAnio) {
-                if (filtroMes) {
-                    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-                    filtrosTexto += `Mes: ${meses[parseInt(filtroMes)-1]}, `;
-                }
-                if (filtroAnio) filtrosTexto += `Año: ${filtroAnio}, `;
+            if (filtroProducto) filtrosTexto += `Producto: ${filtroProducto}, `;
+            if (filtroMes) {
+                const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+                filtrosTexto += `Mes: ${meses[parseInt(filtroMes)-1]}, `;
             }
+            if (filtroAnio) filtrosTexto += `Año: ${filtroAnio}, `;
             filtrosTexto += `Total productos: ${productosFiltrados.length}`;
             doc.text(filtrosTexto, 14, 32);
             
@@ -1039,6 +1096,13 @@
             doc.text(`• Total en Despensa: ${document.getElementById('totalDespensa').textContent} unidades`, 14, finalY + 16);
             doc.text(`• Productos próximos a vencer (≤3 días): ${document.getElementById('totalProximos').textContent} unidades`, 14, finalY + 24);
             
+            // Contar productos con bajo stock (cantidad = 1)
+            const bajoStock = productosFiltrados.filter(p => parseInt(p.cantidad) === 1).length;
+            if (bajoStock > 0) {
+                doc.setTextColor(249, 115, 22); // Naranja
+                doc.text(`• Productos con bajo stock (cantidad = 1): ${bajoStock} productos`, 14, finalY + 32);
+            }
+            
             // Número de página
             const pageCount = doc.internal.getNumberOfPages();
             for (let i = 1; i <= pageCount; i++) {
@@ -1053,6 +1117,10 @@
 
         // --- EVENT LISTENERS ---
         document.getElementById('searchInput').addEventListener('input', (e) => {
+            aplicarFiltrosYActualizar();
+        });
+
+        document.getElementById('filtroProducto').addEventListener('change', (e) => {
             aplicarFiltrosYActualizar();
         });
 
