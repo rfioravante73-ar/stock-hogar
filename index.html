@@ -438,9 +438,14 @@
                     <span class="text-sm text-slate-600">
                         <span id="contadorProximos" class="font-bold">0</span> productos
                     </span>
-                    <button onclick="closeModal('modalProximosVencer')" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors">
-                        Cerrar
-                    </button>
+                    <div class="flex gap-2">
+                        <button onclick="exportarPDFProximos()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors">
+                            <i class="fas fa-file-pdf mr-2"></i>PDF
+                        </button>
+                        <button onclick="closeModal('modalProximosVencer')" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors">
+                            Cerrar
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -480,9 +485,14 @@
                     <span class="text-sm text-slate-600">
                         <span id="contadorReponer" class="font-bold">0</span> productos
                     </span>
-                    <button onclick="closeModal('modalProductosReponer')" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors">
-                        Cerrar
-                    </button>
+                    <div class="flex gap-2">
+                        <button onclick="exportarPDFReponer()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors">
+                            <i class="fas fa-file-pdf mr-2"></i>PDF
+                        </button>
+                        <button onclick="closeModal('modalProductosReponer')" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors">
+                            Cerrar
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1345,6 +1355,222 @@
             
             // Guardar PDF
             doc.save(`reporte_despensa_${new Date().toISOString().split('T')[0]}.pdf`);
+        }
+
+        // NUEVA FUNCIÓN: Exportar PDF de productos a reponer
+        function exportarPDFReponer() {
+            const productosReponer = productos.filter(p => {
+                const cantidad = parseInt(p.cantidad) || 0;
+                return cantidad === 1;
+            });
+
+            if (productosReponer.length === 0) {
+                alert('No hay productos a reponer para exportar');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('portrait');
+            
+            // Título
+            doc.setFontSize(18);
+            doc.setTextColor(0, 0, 0);
+            doc.text('Lista de Productos a Reponer - Mi Stock Hogar', 14, 15);
+            
+            // Fecha de generación
+            doc.setFontSize(10);
+            const fecha = new Date().toLocaleDateString('es-ES', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            doc.text(`Generado: ${fecha}`, 14, 25);
+            doc.text(`Total productos a reponer: ${productosReponer.length}`, 14, 32);
+            
+            // Encabezados de la tabla
+            const headers = [['Producto', 'Cantidad', 'Ubicación', 'Vencimiento', 'Comercio', 'Precio ($)', 'Fecha Compra']];
+            
+            // Datos de la tabla
+            const data = productosReponer.map(p => [
+                p.nombre,
+                p.cantidad.toString(),
+                p.ubicacion,
+                formatFecha(p.vencimiento),
+                p.comercio || '-',
+                p.precio ? '$' + parseFloat(p.precio).toFixed(2) : '-',
+                formatFecha(p.fechaCompra) || '-'
+            ]);
+            
+            // Generar tabla
+            doc.autoTable({
+                head: headers,
+                body: data,
+                startY: 40,
+                theme: 'grid',
+                headStyles: { 
+                    fillColor: [128, 90, 213], // púrpura
+                    textColor: 255,
+                    fontStyle: 'bold'
+                },
+                alternateRowStyles: {
+                    fillColor: [245, 243, 255]
+                },
+                columnStyles: {
+                    0: { cellWidth: 40 },
+                    1: { cellWidth: 20 },
+                    2: { cellWidth: 25 },
+                    3: { cellWidth: 30 },
+                    4: { cellWidth: 35 },
+                    5: { cellWidth: 25 },
+                    6: { cellWidth: 30 }
+                }
+            });
+            
+            // Nota especial
+            const finalY = doc.lastAutoTable.finalY + 10;
+            doc.setFontSize(9);
+            doc.setTextColor(128, 90, 213);
+            doc.text('Nota: Estos productos tienen solo 1 unidad en stock. Se recomienda reponerlos pronto.', 14, finalY);
+            
+            // Número de página
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 10);
+            }
+            
+            // Guardar PDF
+            doc.save(`productos_a_reponer_${new Date().toISOString().split('T')[0]}.pdf`);
+        }
+
+        // NUEVA FUNCIÓN: Exportar PDF de productos próximos a vencer
+        function exportarPDFProximos() {
+            const hoy = new Date();
+            const productosProximos = productos.filter(p => {
+                if (!p.vencimiento) return false;
+                const fechaVencimiento = new Date(p.vencimiento);
+                const diffDias = Math.ceil((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24));
+                return diffDias <= 3 && diffDias >= 0;
+            });
+
+            if (productosProximos.length === 0) {
+                alert('No hay productos próximos a vencer para exportar');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('portrait');
+            
+            // Título
+            doc.setFontSize(18);
+            doc.setTextColor(0, 0, 0);
+            doc.text('Lista de Productos Próximos a Vencer - Mi Stock Hogar', 14, 15);
+            
+            // Fecha de generación
+            doc.setFontSize(10);
+            const fecha = new Date().toLocaleDateString('es-ES', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            doc.text(`Generado: ${fecha}`, 14, 25);
+            doc.text(`Total productos próximos a vencer: ${productosProximos.length}`, 14, 32);
+            
+            // Encabezados de la tabla
+            const headers = [['Producto', 'Cantidad', 'Ubicación', 'Vencimiento', 'Días Restantes', 'Comercio']];
+            
+            // Datos de la tabla
+            const data = productosProximos.map(p => {
+                const fechaVencimiento = new Date(p.vencimiento);
+                const diffDias = Math.ceil((fechaVencimiento - hoy) / (1000 * 60 * 60 * 24));
+                let diasRestantes = diffDias;
+                if (diffDias === 0) diasRestantes = 'HOY';
+                else if (diffDias === 1) diasRestantes = 'MAÑANA';
+                else diasRestantes = `${diffDias} días`;
+
+                return [
+                    p.nombre,
+                    p.cantidad.toString(),
+                    p.ubicacion,
+                    formatFecha(p.vencimiento),
+                    diasRestantes,
+                    p.comercio || '-'
+                ];
+            });
+            
+            // Generar tabla
+            doc.autoTable({
+                head: headers,
+                body: data,
+                startY: 40,
+                theme: 'grid',
+                headStyles: { 
+                    fillColor: [220, 38, 38], // rojo
+                    textColor: 255,
+                    fontStyle: 'bold'
+                },
+                alternateRowStyles: {
+                    fillColor: [254, 226, 226]
+                },
+                columnStyles: {
+                    0: { cellWidth: 45 },
+                    1: { cellWidth: 20 },
+                    2: { cellWidth: 25 },
+                    3: { cellWidth: 30 },
+                    4: { cellWidth: 30 },
+                    5: { cellWidth: 40 }
+                },
+                didDrawCell: function(data) {
+                    // Resaltar celdas de "Días Restantes" según la urgencia
+                    if (data.column.index === 4 && data.cell.section === 'body') {
+                        const texto = data.cell.text[0];
+                        if (texto === 'HOY') {
+                            doc.setFillColor(254, 202, 202);
+                            doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
+                            doc.setTextColor(220, 38, 38);
+                            doc.text(texto, data.cell.x + 3, data.cell.y + 7);
+                        } else if (texto === 'MAÑANA') {
+                            doc.setFillColor(254, 215, 170);
+                            doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
+                            doc.setTextColor(217, 119, 6);
+                            doc.text(texto, data.cell.x + 3, data.cell.y + 7);
+                        }
+                    }
+                }
+            });
+            
+            // Leyenda de colores
+            const finalY = doc.lastAutoTable.finalY + 15;
+            doc.setFontSize(9);
+            doc.setTextColor(0, 0, 0);
+            
+            // Cuadro rojo para "HOY"
+            doc.setFillColor(254, 202, 202);
+            doc.rect(14, finalY, 5, 5, 'F');
+            doc.text('Vence hoy', 22, finalY + 4);
+            
+            // Cuadro naranja para "MAÑANA"
+            doc.setFillColor(254, 215, 170);
+            doc.rect(14, finalY + 8, 5, 5, 'F');
+            doc.text('Vence mañana', 22, finalY + 12);
+            
+            // Número de página
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 10);
+            }
+            
+            // Guardar PDF
+            doc.save(`productos_proximos_vencer_${new Date().toISOString().split('T')[0]}.pdf`);
         }
 
         // --- EVENT LISTENERS ---
